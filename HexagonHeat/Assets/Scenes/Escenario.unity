@@ -483,6 +483,12 @@ MonoBehaviour:
   regenerationTime: 2
   allHexagons:
   - {fileID: 2027980684}
+  - {fileID: 2027980683}
+  - {fileID: 2027980682}
+  - {fileID: 2027980681}
+  - {fileID: 2027980680}
+  - {fileID: 1259510250}
+  - {fileID: 823407192}
   safeColorText: {fileID: 0}
 --- !u!4 &1287051587
 Transform:

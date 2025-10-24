@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// Controls individual hexagon behavior: color state and falling mechanics
@@ -54,6 +54,9 @@ public class HexagonController : MonoBehaviour
         // Configure Rigidbody
         rb.isKinematic = true; // Start as kinematic
         rb.useGravity = false; // Gravity controlled manually
+
+        // DEBUG: Log hexagon initialization
+        Debug.Log($"[INIT] {gameObject.name} initialized with color: {hexColor}");
     }
 
     #endregion
@@ -67,9 +70,17 @@ public class HexagonController : MonoBehaviour
     {
         isSafe = safe;
 
+        // DEBUG: Log state change
+        Debug.Log($"[STATE] {gameObject.name} ({hexColor}) set to: {(safe ? "SAFE ✅" : "UNSAFE ❌")}");
+
         if (!safe && !isFalling)
         {
+            Debug.Log($"[FALLING] {gameObject.name} ({hexColor}) starting to fall!");
             StartFalling();
+        }
+        else if (safe)
+        {
+            Debug.Log($"[SAFE] {gameObject.name} ({hexColor}) is the safe hexagon!");
         }
     }
 
@@ -131,7 +142,7 @@ public class HexagonController : MonoBehaviour
         // Re-enable the game object if it was disabled
         gameObject.SetActive(true);
 
-        Debug.Log($"{gameObject.name} ({hexColor}) regenerated!");
+        Debug.Log($"[REGEN] {gameObject.name} ({hexColor}) regenerated!");
     }
 
     #endregion
@@ -161,7 +172,7 @@ public class HexagonController : MonoBehaviour
         // Schedule regeneration instead of destroying
         Invoke(nameof(Regenerate), regenerationDelay);
 
-        Debug.Log($"{gameObject.name} ({hexColor}) is falling!");
+        Debug.Log($"[PHYSICS] {gameObject.name} ({hexColor}) physics enabled - falling now!");
     }
 
     /// <summary>
@@ -172,6 +183,7 @@ public class HexagonController : MonoBehaviour
         if (hexCollider != null)
         {
             hexCollider.enabled = false;
+            Debug.Log($"[COLLIDER] {gameObject.name} ({hexColor}) collider disabled");
         }
     }
 

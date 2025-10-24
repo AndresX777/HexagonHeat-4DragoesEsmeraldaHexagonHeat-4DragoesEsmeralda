@@ -147,53 +147,66 @@ public class NPCController : MonoBehaviour
     /// <summary>
     /// Actualizar destino basado en temporizador
     /// </summary>
-    private void UpdateDestination()
+  
+      private void UpdateDestination()
+        {
+            // Safety check: ensure agent is enabled and on NavMesh
+            if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+            {
+                isMoving = false;
+                return;
+            }
+
+            destinationTimer -= Time.deltaTime;
+
+            if (destinationTimer <= 0f)
+            {
+                SetRandomDestination();
+                destinationTimer = destinationChangeTime;
+            }
+
+            // Verificar si llegó al destino (con protección adicional)
+            if (agent.hasPath && !agent.pathPending)
+            {
+                if (agent.remainingDistance <= agent.stoppingDistance)
+                {
+                    isMoving = false;
+                }
+                else
+                {
+                    isMoving = true;
+                }
+            }
+        }
+        private void SetRandomDestination()
     {
-        destinationTimer -= Time.deltaTime; // Reducir temporizador
-
-        // Si el temporizador llega a cero
-        if (destinationTimer <= 0f)
+        // Safety check
+    if (agent == null || !agent.enabled || !agent.isOnNavMesh)
         {
-            SetRandomDestination(); // Establecer nuevo destino aleatorio
-            destinationTimer = destinationChangeTime; // Reiniciar temporizador
+            return;
         }
 
-        // Verificar si llegó al destino
-        if (agent.remainingDistance <= agent.stoppingDistance && !agent.pathPending)
-        {
-            isMoving = false; // Ya no se está moviendo
-        }
-        else
-        {
-            isMoving = true; // Todavía está en movimiento
-        }
-    }
+        Vector3 randomDirection = Random.insideUnitSphere * wanderRadius;
+        randomDirection += startPosition;
 
-    /// <summary>
-    /// Establecer un destino aleatorio dentro del radio de deambulación
-    /// </summary>
-    private void SetRandomDestination()
-    {
-        Vector3 randomDirection = Random.insideUnitSphere * wanderRadius; // Dirección aleatoria
-        randomDirection += startPosition; // Centrar en posición inicial
-
-        NavMeshHit hit; // Variable para guardar resultado de búsqueda
-        // Buscar posición válida en el NavMesh
+        NavMeshHit hit;
         if (NavMesh.SamplePosition(randomDirection, out hit, wanderRadius, NavMesh.AllAreas))
         {
-            agent.SetDestination(hit.position); // Establecer nuevo destino
-            isMoving = true; // Activar estado de movimiento
+            agent.SetDestination(hit.position);
+            isMoving = true;
         }
     }
 
-    #endregion
 
-    #region Animaciones
 
-    /// <summary>
-    /// Actualizar parámetros del animator basado en estado del NPC
-    /// </summary>
-    private void UpdateAnimations()
+#endregion
+
+#region Animaciones
+
+/// <summary>
+/// Actualizar parámetros del animator basado en estado del NPC
+/// </summary>
+private void UpdateAnimations()
     {
         if (animator == null) return; // Salir si no hay animator
 

@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -24,6 +24,10 @@ public class HexagonGameManager : MonoBehaviour
     [Header("UI References (Optional)")]
     [Tooltip("Text to display safe color")]
     [SerializeField] private UnityEngine.UI.Text safeColorText;
+
+    [Header("Visual Elements")]
+    [Tooltip("Bandera controller for Albion")]
+    [SerializeField] private BanderaController banderaController;
 
     // Private variables
     private HexagonColor currentSafeColor;
@@ -97,7 +101,14 @@ public class HexagonGameManager : MonoBehaviour
             safeColorText.text = $"Round {currentRound}\nSafe Color: {currentSafeColor}";
         }
 
-        // Wait for warning time (players can see the safe color)
+        // ⭐ NUEVO: Show flag BEFORE hexagons fall
+        if (banderaController != null)
+        {
+            banderaController.ShowFlag(currentSafeColor);
+            Debug.Log($"[GAME] Albion showing {currentSafeColor} flag!");
+        }
+
+        // Wait for warning time (players see the flag and safe color)
         yield return new WaitForSeconds(warningTime);
 
         // Drop unsafe hexagons

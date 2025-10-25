@@ -1,83 +1,99 @@
-using System.Collections.Generic;
+Ôªøusing System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI; // Importar sistema de navegaciÛn para IA
+using UnityEngine.AI; // Importar sistema de navegaci√≥n para IA
 
 /// <summary>
 /// Controla el movimiento, pathfinding y animaciones de un NPC
 /// </summary>
-[RequireComponent(typeof(NavMeshAgent))] // Requiere componente NavMeshAgent autom·ticamente
+[RequireComponent(typeof(NavMeshAgent))] // Requiere componente NavMeshAgent autom√°ticamente
 public class NPCController : MonoBehaviour
 {
-    [Header("ConfiguraciÛn de IA")]
+    [Header("Configuraci√≥n de IA")]
     [Tooltip("Velocidad de movimiento del NPC")]
     [SerializeField] private float moveSpeed = 3.5f; // Velocidad de desplazamiento
 
-    [Tooltip("Cada cu·ntos segundos cambia de destino")]
+    [Tooltip("Cada cu√°ntos segundos cambia de destino")]
     [SerializeField] private float destinationChangeTime = 5f; // Tiempo entre cambios de ruta
 
-    [Tooltip("Radio de deambulaciÛn desde la posiciÛn inicial")]
-    [SerializeField] private float wanderRadius = 10f; // ¡rea donde puede moverse
+    [Tooltip("Radio de deambulaci√≥n desde la posici√≥n inicial")]
+    [SerializeField] private float wanderRadius = 10f; // √Årea donde puede moverse
 
     [Header("Ground Detection")]
     [Tooltip("Transform point to check if NPC is grounded")]
-    [SerializeField] private Transform groundCheck; // Punto de verificaciÛn del suelo
+    [SerializeField] private Transform groundCheck; // Punto de verificaci√≥n del suelo
 
     [Tooltip("Radius of the ground check sphere")]
-    [SerializeField] private float groundCheckRadius = 0.3f; // Radio de detecciÛn
+    [SerializeField] private float groundCheckRadius = 0.3f; // Radio de detecci√≥n
 
     [Tooltip("Layer mask for what counts as ground")]
-    [SerializeField] private LayerMask groundLayer; // Capa del suelo (hex·gonos)
+    [SerializeField] private LayerMask groundLayer; // Capa del suelo (hex√°gonos)
 
     [Header("Componentes")]
     [Tooltip("Referencia al componente Animator")]
     [SerializeField] private Animator animator; // Controlador de animaciones
 
     // Variables privadas
-    private NavMeshAgent agent; // Referencia al agente de navegaciÛn
-    private Vector3 startPosition; // PosiciÛn inicial del NPC
+    private NavMeshAgent agent; // Referencia al agente de navegaci√≥n
+    private Rigidbody rb; // ‚≠ê NUEVO: Referencia al Rigidbody
+    private Vector3 startPosition; // Posici√≥n inicial del NPC
     private float destinationTimer; // Temporizador para cambiar destino
     private bool isMoving; // Estado de movimiento
-    private bool isGrounded; // Estado si est· en el suelo
+    private bool isGrounded; // Estado si est√° en el suelo
+    private bool hasFallen = false; // ‚≠ê NUEVO: Evitar m√∫ltiples ca√≠das
 
-    // Nombres de par·metros del Animator (mejor rendimiento con hash)
+    // Nombres de par√°metros del Animator (mejor rendimiento con hash)
     private readonly int speedHash = Animator.StringToHash("Speed"); // Hash para velocidad
     private readonly int isMovingHash = Animator.StringToHash("IsMoving"); // Hash para estado movimiento
     private readonly int isGroundedHash = Animator.StringToHash("IsGrounded"); // Hash para estado en suelo
 
-    #region MÈtodos del Ciclo de Unity
+    #region M√©todos del Ciclo de Unity
 
-    // MÈtodo que se ejecuta al crear el objeto
+    // M√©todo que se ejecuta al crear el objeto
     private void Awake()
     {
         agent = GetComponent<NavMeshAgent>(); // Obtener referencia al NavMeshAgent
-        startPosition = transform.position; // Guardar posiciÛn inicial
+        startPosition = transform.position; // Guardar posici√≥n inicial
+
+        // ‚≠ê NUEVO: Configurar Rigidbody
+        rb = GetComponent<Rigidbody>();
+        if (rb == null)
+        {
+            rb = gameObject.AddComponent<Rigidbody>();
+        }
+
+        // ‚≠ê NUEVO: Rigidbody siempre Kinematic cuando usa NavMeshAgent
+        rb.isKinematic = true;
+        rb.useGravity = false;
+        rb.constraints = RigidbodyConstraints.FreezeRotation; // Evitar rotaciones extra√±as por f√≠sica
 
         // Configurar NavMeshAgent
         agent.speed = moveSpeed; // Establecer velocidad
-        agent.angularSpeed = 360f; // Velocidad de rotaciÛn
-        agent.acceleration = 8f; // AceleraciÛn
+        agent.angularSpeed = 360f; // Velocidad de rotaci√≥n
+        agent.acceleration = 8f; // Aceleraci√≥n
         agent.stoppingDistance = 0.5f; // Distancia para detenerse
 
-        // Buscar autom·ticamente animator si no est· asignado
+        // Buscar autom√°ticamente animator si no est√° asignado
         if (animator == null)
         {
             animator = GetComponentInChildren<Animator>(); // Buscar en objetos hijos
         }
+
+        Debug.Log($"[NPC] {gameObject.name} initialized with Rigidbody (Kinematic mode)");
     }
 
-    // MÈtodo que se ejecuta al inicio del juego
+    // M√©todo que se ejecuta al inicio del juego
     private void Start()
     {
         SetRandomDestination(); // Establecer destino inicial
     }
 
-    // MÈtodo que se ejecuta cada frame
+    // M√©todo que se ejecuta cada frame
     private void Update()
     {
-        CheckGroundStatus(); // Verificar si est· en el suelo
+        CheckGroundStatus(); // Verificar si est√° en el suelo
         UpdateDestination(); // Actualizar destino del NPC
         UpdateAnimations(); // Actualizar animaciones
-        CheckIfFalling(); // Verificar si est· cayendo
+        CheckIfFalling(); // Verificar si est√° cayendo
     }
 
     #endregion
@@ -113,8 +129,8 @@ public class NPCController : MonoBehaviour
     /// </summary>
     private void CheckIfFalling()
     {
-        // If not grounded and falling (Y velocity negative)
-        if (!isGrounded && agent.velocity.y < -1f)
+        // If not grounded and falling (Y velocity negative) - y a√∫n no ha ca√≠do
+        if (!isGrounded && agent.velocity.y < -1f && !hasFallen)
         {
             OnNPCFell(); // Handle NPC elimination
         }
@@ -125,6 +141,17 @@ public class NPCController : MonoBehaviour
     /// </summary>
     private void OnNPCFell()
     {
+        hasFallen = true; // Marcar que ya cay√≥ para evitar m√∫ltiples llamadas
+
+        // ‚≠ê NUEVO: Activar f√≠sica para que caiga realmente
+        if (rb != null)
+        {
+            rb.isKinematic = false;  // Desactivar Kinematic - activar f√≠sica din√°mica
+            rb.useGravity = true;     // Activar gravedad
+
+            Debug.Log($"[FALLING] {gameObject.name} physics enabled - falling now!");
+        }
+
         // Disable agent to prevent further movement
         agent.enabled = false;
 
@@ -147,41 +174,42 @@ public class NPCController : MonoBehaviour
     /// <summary>
     /// Actualizar destino basado en temporizador
     /// </summary>
-  
-      private void UpdateDestination()
+
+    private void UpdateDestination()
+    {
+        // Safety check: ensure agent is enabled and on NavMesh
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh)
         {
-            // Safety check: ensure agent is enabled and on NavMesh
-            if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+            isMoving = false;
+            return;
+        }
+
+        destinationTimer -= Time.deltaTime;
+
+        if (destinationTimer <= 0f)
+        {
+            SetRandomDestination();
+            destinationTimer = destinationChangeTime;
+        }
+
+        // Verificar si lleg√≥ al destino (con protecci√≥n adicional)
+        if (agent.hasPath && !agent.pathPending)
+        {
+            if (agent.remainingDistance <= agent.stoppingDistance)
             {
                 isMoving = false;
-                return;
             }
-
-            destinationTimer -= Time.deltaTime;
-
-            if (destinationTimer <= 0f)
+            else
             {
-                SetRandomDestination();
-                destinationTimer = destinationChangeTime;
-            }
-
-            // Verificar si llegÛ al destino (con protecciÛn adicional)
-            if (agent.hasPath && !agent.pathPending)
-            {
-                if (agent.remainingDistance <= agent.stoppingDistance)
-                {
-                    isMoving = false;
-                }
-                else
-                {
-                    isMoving = true;
-                }
+                isMoving = true;
             }
         }
-        private void SetRandomDestination()
+    }
+
+    private void SetRandomDestination()
     {
         // Safety check
-    if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+        if (agent == null || !agent.enabled || !agent.isOnNavMesh)
         {
             return;
         }
@@ -197,16 +225,14 @@ public class NPCController : MonoBehaviour
         }
     }
 
+    #endregion
 
+    #region Animaciones
 
-#endregion
-
-#region Animaciones
-
-/// <summary>
-/// Actualizar par·metros del animator basado en estado del NPC
-/// </summary>
-private void UpdateAnimations()
+    /// <summary>
+    /// Actualizar par√°metros del animator basado en estado del NPC
+    /// </summary>
+    private void UpdateAnimations()
     {
         if (animator == null) return; // Salir si no hay animator
 
@@ -215,28 +241,28 @@ private void UpdateAnimations()
         animator.SetBool(isMovingHash, isMoving && speed > 0.1f); // Pasar estado movimiento
         animator.SetBool(isGroundedHash, isGrounded); // Pasar estado en suelo
 
-        // Rotar NPC para mirar hacia la direcciÛn de movimiento
+        // Rotar NPC para mirar hacia la direcci√≥n de movimiento
         if (agent.velocity.magnitude > 0.1f)
         {
-            Quaternion targetRotation = Quaternion.LookRotation(agent.velocity.normalized); // Calcular rotaciÛn objetivo
+            Quaternion targetRotation = Quaternion.LookRotation(agent.velocity.normalized); // Calcular rotaci√≥n objetivo
             transform.rotation = Quaternion.Slerp( // Rotar suavemente
                 transform.rotation,
                 targetRotation,
-                Time.deltaTime * 5f // Velocidad de rotaciÛn
+                Time.deltaTime * 5f // Velocidad de rotaci√≥n
             );
         }
     }
 
     #endregion
 
-    #region MÈtodos P˙blicos (para control externo)
+    #region M√©todos P√∫blicos (para control externo)
 
     /// <summary>
-    /// Hacer que el NPC se mueva a una posiciÛn especÌfica
+    /// Hacer que el NPC se mueva a una posici√≥n espec√≠fica
     /// </summary>
     public void MoveToPosition(Vector3 position)
     {
-        agent.SetDestination(position); // Establecer destino especÌfico
+        agent.SetDestination(position); // Establecer destino espec√≠fico
         isMoving = true; // Activar movimiento
         destinationTimer = destinationChangeTime; // Reiniciar temporizador
     }
@@ -251,7 +277,7 @@ private void UpdateAnimations()
     }
 
     /// <summary>
-    /// Verificar si el NPC se est· moviendo actualmente
+    /// Verificar si el NPC se est√° moviendo actualmente
     /// </summary>
     public bool IsMoving()
     {
@@ -268,20 +294,20 @@ private void UpdateAnimations()
 
     #endregion
 
-    #region VisualizaciÛn de Debug
+    #region Visualizaci√≥n de Debug
 
-    // MÈtodo para dibujar gizmos en el editor cuando el objeto est· seleccionado
+    // M√©todo para dibujar gizmos en el editor cuando el objeto est√° seleccionado
     private void OnDrawGizmosSelected()
     {
-        // Dibujar radio de deambulaciÛn
+        // Dibujar radio de deambulaci√≥n
         Gizmos.color = Color.cyan; // Color cian
-        Gizmos.DrawWireSphere(Application.isPlaying ? startPosition : transform.position, wanderRadius); // CÌrculo del ·rea
+        Gizmos.DrawWireSphere(Application.isPlaying ? startPosition : transform.position, wanderRadius); // C√≠rculo del √°rea
 
-        // Dibujar ruta actual si se est· moviendo
+        // Dibujar ruta actual si se est√° moviendo
         if (agent != null && agent.hasPath)
         {
-            Gizmos.color = Color.yellow; // Color amarillo para la lÌnea
-            Gizmos.DrawLine(transform.position, agent.destination); // LÌnea hacia destino
+            Gizmos.color = Color.yellow; // Color amarillo para la l√≠nea
+            Gizmos.DrawLine(transform.position, agent.destination); // L√≠nea hacia destino
 
             Gizmos.color = Color.red; // Color rojo para el destino
             Gizmos.DrawWireSphere(agent.destination, 0.5f); // Esfera en el destino

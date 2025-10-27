@@ -4,6 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Manages the hexagon game flow: selecting safe colors and dropping unsafe hexagons
+/// MODIFIED: Added player system integration
 /// </summary>
 public class HexagonGameManager : MonoBehaviour
 {
@@ -21,6 +22,10 @@ public class HexagonGameManager : MonoBehaviour
     [Tooltip("All hexagons in the scene")]
     [SerializeField] private List<HexagonController> allHexagons = new List<HexagonController>();
 
+    [Header("Player System References")]
+    [SerializeField] private PlayerManager playerManager;
+    [SerializeField] private PlayerUIManager playerUIManager;
+
     [Header("UI References (Optional)")]
     [Tooltip("Text to display safe color")]
     [SerializeField] private UnityEngine.UI.Text safeColorText;
@@ -34,6 +39,8 @@ public class HexagonGameManager : MonoBehaviour
     private bool gameStarted = false;
     private bool isWaitingForRegeneration = false;
     private int currentRound = 0;
+    private List<int> eliminatedHexagons = new List<int>();
+    private List<int> safeHexagons = new List<int>();
 
     #region Unity Lifecycle
 
@@ -45,7 +52,54 @@ public class HexagonGameManager : MonoBehaviour
             FindAllHexagons();
         }
 
+        // Initialize players
+        if (playerManager != null)
+        {
+            playerManager.InitializePlayers(4); // 4 players (1 manual + 3 AI)
+        }
+
+        if (playerUIManager != null && playerManager != null)
+        {
+            playerUIManager.ShowPlayerList(playerManager.GetAlivePlayers());
+        }
+
         StartGame();
+    }
+
+    private void Update()
+    {
+        // Update all players
+        if (playerManager != null)
+        {
+            // Update player positions
+            playerManager.UpdateAllPlayers();
+
+            // Handle manual player input (WASD)
+            Player manualPlayer = playerManager.GetManualPlayer();
+            if (manualPlayer != null && manualPlayer.IsAlive())
+            {
+                PlayerController controller = manualPlayer.GetComponent<PlayerController>();
+                if (controller != null)
+                    controller.HandleInput();
+            }
+
+            // Update AI players
+            foreach (Player player in playerManager.GetAlivePlayers())
+            {
+                if (!player.isManualControl)
+                {
+                    AIPlayer aiController = player.GetComponent<AIPlayer>();
+                    if (aiController != null)
+                        aiController.AIUpdate();
+                }
+            }
+        }
+
+        // Update UI
+        if (playerUIManager != null)
+        {
+            playerUIManager.UpdateAllPlayerStatus();
+        }
     }
 
     #endregion
@@ -60,7 +114,7 @@ public class HexagonGameManager : MonoBehaviour
         gameStarted = true;
         currentRound = 0;
         StartCoroutine(GameLoop());
-        Debug.Log("Hexagon Heat game started!");
+        Debug.Log("[GAME] Hexagon Heat game started!");
     }
 
     /// <summary>
@@ -70,6 +124,14 @@ public class HexagonGameManager : MonoBehaviour
     {
         while (gameStarted)
         {
+            // Check if game should end (winner found)
+            if (playerManager != null && playerManager.GameEnded)
+            {
+                Debug.Log("[GAME] Game ended - Winner found!");
+                gameStarted = false;
+                break;
+            }
+
             // Start new round
             currentRound++;
             yield return StartCoroutine(RunRound());
@@ -79,6 +141,10 @@ public class HexagonGameManager : MonoBehaviour
 
             // Regenerate all hexagons
             RegenerateAllHexagons();
+
+            // Reset for next round
+            if (playerManager != null)
+                playerManager.ResetForNextRound();
 
             // Wait a bit before next round
             yield return new WaitForSeconds(1f);
@@ -95,13 +161,16 @@ public class HexagonGameManager : MonoBehaviour
 
         Debug.Log($"===== ROUND {currentRound} ===== Safe color: {currentSafeColor}");
 
+        // Calculate safe hexagons based on color
+        CalculateSafeHexagons();
+
         // Update UI
         if (safeColorText != null)
         {
             safeColorText.text = $"Round {currentRound}\nSafe Color: {currentSafeColor}";
         }
 
-        // ⭐ NUEVO: Show flag BEFORE hexagons fall
+        // Show flag BEFORE hexagons fall
         if (banderaController != null)
         {
             banderaController.ShowFlag(currentSafeColor);
@@ -124,6 +193,7 @@ public class HexagonGameManager : MonoBehaviour
     private void DropUnsafeHexagons()
     {
         int fallingCount = 0;
+        eliminatedHexagons.Clear();
 
         foreach (HexagonController hex in allHexagons)
         {
@@ -135,11 +205,17 @@ public class HexagonGameManager : MonoBehaviour
                 if (!isSafe)
                 {
                     fallingCount++;
+                    // Track which hexagons are eliminated
+                    int hexId = allHexagons.IndexOf(hex);
+                    eliminatedHexagons.Add(hexId);
                 }
             }
         }
 
-        Debug.Log($"Unsafe hexagons are falling! Only {currentSafeColor} is safe! ({fallingCount} hexagons falling)");
+        // Notify player manager about eliminated hexagons
+        OnHexagonsEliminated(eliminatedHexagons);
+
+        Debug.Log($"[GAME] Unsafe hexagons are falling! Only {currentSafeColor} is safe! ({fallingCount} hexagons falling)");
     }
 
     /// <summary>
@@ -155,7 +231,128 @@ public class HexagonGameManager : MonoBehaviour
             }
         }
 
-        Debug.Log($"All hexagons regenerated! Ready for Round {currentRound + 1}");
+        Debug.Log($"[GAME] All hexagons regenerated! Ready for Round {currentRound + 1}");
+    }
+
+    #endregion
+
+    #region Player System Integration
+
+    /// <summary>
+    /// Called when hexagons are eliminated
+    /// Notifies PlayerManager to check for deaths
+    /// </summary>
+    public void OnHexagonsEliminated(List<int> eliminatedIds)
+    {
+        eliminatedHexagons = new List<int>(eliminatedIds);
+
+        // Notify player manager to check for deaths
+        if (playerManager != null)
+        {
+            playerManager.UpdateAllPlayers();
+        }
+    }
+
+    /// <summary>
+    /// Get hexagon world position by ID (index in list)
+    /// </summary>
+    public Vector3 GetHexagonPosition(int hexagonId)
+    {
+        if (hexagonId >= 0 && hexagonId < allHexagons.Count && allHexagons[hexagonId] != null)
+        {
+            return allHexagons[hexagonId].transform.position;
+        }
+
+        Debug.LogWarning($"[GAME] Hexagon ID {hexagonId} not found!");
+        return Vector3.zero;
+    }
+
+    /// <summary>
+    /// Get adjacent hexagons for a given hexagon
+    /// In a circular arrangement, neighbors are index +1 and -1
+    /// </summary>
+    public List<int> GetAdjacentHexagons(int hexagonId)
+    {
+        List<int> adjacent = new List<int>();
+        int totalHexagons = GetTotalHexagonCount();
+
+        if (totalHexagons == 0)
+            return adjacent;
+
+        // Left neighbor
+        int left = (hexagonId - 1 + totalHexagons) % totalHexagons;
+        adjacent.Add(left);
+
+        // Right neighbor
+        int right = (hexagonId + 1) % totalHexagons;
+        adjacent.Add(right);
+
+        // TODO: Add more neighbors if your grid is not circular
+        // For example, if hexagons are arranged in rows/columns:
+        // adjacent.Add(hexagonId - rowWidth);  // Top
+        // adjacent.Add(hexagonId + rowWidth);  // Bottom
+
+        return adjacent;
+    }
+
+    /// <summary>
+    /// Get hexagons that are eliminated this round
+    /// </summary>
+    public List<int> GetEliminatedHexagons()
+    {
+        return new List<int>(eliminatedHexagons);
+    }
+
+    /// <summary>
+    /// Get safe hexagons for this round
+    /// </summary>
+    public List<int> GetSafeHexagons()
+    {
+        return new List<int>(safeHexagons);
+    }
+
+    /// <summary>
+    /// Calculate which hexagons are safe this round
+    /// </summary>
+    private void CalculateSafeHexagons()
+    {
+        safeHexagons.Clear();
+
+        for (int i = 0; i < allHexagons.Count; i++)
+        {
+            if (allHexagons[i] != null && allHexagons[i].GetColor() == currentSafeColor)
+            {
+                safeHexagons.Add(i);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Get total number of hexagons
+    /// </summary>
+    public int GetTotalHexagonCount()
+    {
+        return allHexagons != null ? allHexagons.Count : 0;
+    }
+
+    /// <summary>
+    /// Get distance of hexagon from center
+    /// Assumes hexagon at index 0 is center
+    /// </summary>
+    public float GetHexagonDistanceFromCenter(int hexagonId)
+    {
+        Vector3 hexPos = GetHexagonPosition(hexagonId);
+        Vector3 centerPos = GetHexagonPosition(0);
+
+        return Vector3.Distance(hexPos, centerPos);
+    }
+
+    /// <summary>
+    /// Check if a player is on a specific hexagon
+    /// </summary>
+    public bool IsPlayerOnHexagon(int hexagonId, Player player)
+    {
+        return player.currentHexagonId == hexagonId;
     }
 
     #endregion
@@ -169,7 +366,7 @@ public class HexagonGameManager : MonoBehaviour
     {
         HexagonController[] hexagons = FindObjectsOfType<HexagonController>();
         allHexagons.AddRange(hexagons);
-        Debug.Log($"Found {allHexagons.Count} hexagons in the scene");
+        Debug.Log($"[GAME] Found {allHexagons.Count} hexagons in the scene");
     }
 
     /// <summary>
@@ -194,7 +391,7 @@ public class HexagonGameManager : MonoBehaviour
     public void StopGame()
     {
         gameStarted = false;
-        Debug.Log("Game stopped!");
+        Debug.Log("[GAME] Game stopped!");
     }
 
     #endregion

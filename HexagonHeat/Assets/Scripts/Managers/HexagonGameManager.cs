@@ -95,6 +95,13 @@ public class HexagonGameManager : MonoBehaviour
 
         Debug.Log($"===== ROUND {currentRound} ===== Safe color: {currentSafeColor}");
 
+        // ⭐ ACTUALIZAR UI DE RONDA ⭐
+        UIManager uiManager = FindObjectOfType<UIManager>();
+        if (uiManager != null)
+        {
+            uiManager.UpdateRound(currentRound);
+        }
+
         // Update UI
         if (safeColorText != null)
         {

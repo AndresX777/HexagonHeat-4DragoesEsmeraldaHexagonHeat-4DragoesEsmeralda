@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class GameEndUIController : MonoBehaviour
 {
@@ -12,10 +12,22 @@ public class GameEndUIController : MonoBehaviour
     {
         winPanel.SetActive(false);
         losePanel.SetActive(false);
-
         menu = FindObjectOfType<MenuPrincipalController>();
-    }
 
+        // ⭐ NUEVO: Verificar si venimos del juego
+        if (GameResult.Instance != null && GameResult.Instance.gameEnded)
+        {
+            if (GameResult.Instance.playerWon)
+            {
+                ShowWin();
+            }
+            else
+            {
+                ShowLose();
+            }
+            GameResult.Instance.Reset();
+        }
+    }
 
     public void ShowWin()
     {
@@ -29,7 +41,6 @@ public class GameEndUIController : MonoBehaviour
         winPanel.SetActive(false);
     }
 
-
     public void VolverAJugar()
     {
         UnityEngine.SceneManagement.SceneManager.LoadScene("Escenario");
@@ -39,7 +50,6 @@ public class GameEndUIController : MonoBehaviour
     {
         winPanel.SetActive(false);
         losePanel.SetActive(false);
-
         menu.panelMenu.SetActive(true);
     }
 
@@ -47,7 +57,6 @@ public class GameEndUIController : MonoBehaviour
     {
         winPanel.SetActive(false);
         losePanel.SetActive(false);
-
         menu.panelCreditos.SetActive(true);
     }
 
@@ -56,5 +65,3 @@ public class GameEndUIController : MonoBehaviour
         Application.Quit();
     }
 }
-
-

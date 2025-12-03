@@ -18,7 +18,7 @@ public class HexagonGameManager : MonoBehaviour
     [SerializeField] private float regenerationTime = 2f;
 
     [Tooltip("Rounds needed to win the game")]
-    [SerializeField] private int roundsToWin = 10; // ⭐ NUEVO
+    [SerializeField] private int roundsToWin = 10;
 
     [Header("Hexagon References")]
     [Tooltip("All hexagons in the scene")]
@@ -29,13 +29,13 @@ public class HexagonGameManager : MonoBehaviour
     [SerializeField] private UnityEngine.UI.Text safeColorText;
 
     [Tooltip("UI Manager reference")]
-    [SerializeField] private UIManager uiManager; // ⭐ NUEVO
+    [SerializeField] private UIManager uiManager;
 
     [Header("Visual Elements")]
     [Tooltip("Bandera controller for Albion")]
     [SerializeField] private BanderaController banderaController;
 
-    // ⭐ NUEVO: Estados del juego
+    // Estados del juego
     public enum GameState
     {
         Playing,
@@ -48,13 +48,12 @@ public class HexagonGameManager : MonoBehaviour
     private HexagonColor currentSafeColor;
     private bool gameStarted = false;
     private int currentRound = 0;
-    private GameState currentState = GameState.Playing; // ⭐ NUEVO
+    private GameState currentState = GameState.Playing;
 
     #region Unity Lifecycle
 
     private void Awake()
     {
-        // ⭐ Buscar UIManager si no está asignado
         if (uiManager == null)
         {
             uiManager = FindObjectOfType<UIManager>();
@@ -73,13 +72,11 @@ public class HexagonGameManager : MonoBehaviour
 
     private void OnEnable()
     {
-        // ⭐ SUSCRIBIRSE al evento de muerte del jugador
         PlayerController.OnPlayerDied += HandlePlayerDeath;
     }
 
     private void OnDisable()
     {
-        // ⭐ DESUSCRIBIRSE del evento
         PlayerController.OnPlayerDied -= HandlePlayerDeath;
     }
 
@@ -103,19 +100,16 @@ public class HexagonGameManager : MonoBehaviour
     {
         while (gameStarted && currentState == GameState.Playing)
         {
-            // Start new round
             currentRound++;
 
-            // ⭐ VERIFICAR VICTORIA por rondas
             if (currentRound > roundsToWin)
             {
                 HandleVictory();
-                yield break; // Salir del loop
+                yield break;
             }
 
             yield return StartCoroutine(RunRound());
 
-            // Verificar si el juego sigue activo
             if (currentState != GameState.Playing)
             {
                 yield break;
@@ -131,15 +125,13 @@ public class HexagonGameManager : MonoBehaviour
 
     private IEnumerator RunRound()
     {
-        // Select random safe color
         currentSafeColor = (HexagonColor)Random.Range(0, System.Enum.GetValues(typeof(HexagonColor)).Length);
 
         Debug.Log($"===== RONDA {currentRound}/{roundsToWin} ===== Color seguro: {currentSafeColor}");
 
-        // Update UI
         if (uiManager != null)
         {
-            uiManager.UpdateRound(currentRound, roundsToWin); // ⭐ MODIFICADO
+            uiManager.UpdateRound(currentRound, roundsToWin);
         }
 
         if (safeColorText != null)
@@ -147,7 +139,6 @@ public class HexagonGameManager : MonoBehaviour
             safeColorText.text = $"Ronda {currentRound}/{roundsToWin}\nColor Seguro: {currentSafeColor}";
         }
 
-        // Show flag
         if (banderaController != null)
         {
             banderaController.ShowFlag(currentSafeColor);
@@ -155,7 +146,6 @@ public class HexagonGameManager : MonoBehaviour
 
         yield return new WaitForSeconds(warningTime);
 
-        // Verificar estado antes de hacer caer hexágonos
         if (currentState != GameState.Playing) yield break;
 
         DropUnsafeHexagons();
@@ -202,7 +192,7 @@ public class HexagonGameManager : MonoBehaviour
     #region Victory/Defeat Conditions
 
     /// <summary>
-    /// ⭐ NUEVO: Manejar cuando el jugador muere (cae al agua)
+    /// Manejar cuando el jugador muere (cae al agua)
     /// </summary>
     private void HandlePlayerDeath()
     {
@@ -213,18 +203,21 @@ public class HexagonGameManager : MonoBehaviour
 
         Debug.Log("💀 ¡GAME OVER! El jugador cayó al agua.");
 
-        // Mostrar UI de derrota
-        if (uiManager != null)
+        // Guardar resultado para la otra escena
+        if (GameResult.Instance != null)
         {
-            uiManager.ShowGameOver(currentRound, roundsToWin);
+            GameResult.Instance.SetLose(currentRound);
         }
 
         // Detener todas las corrutinas
         StopAllCoroutines();
+
+        // Ir al menú después de un delay
+        StartCoroutine(LoadMenuAfterDelay(1.5f));
     }
 
     /// <summary>
-    /// ⭐ NUEVO: Manejar victoria
+    /// Manejar victoria
     /// </summary>
     private void HandleVictory()
     {
@@ -235,44 +228,44 @@ public class HexagonGameManager : MonoBehaviour
 
         Debug.Log($"🏆 ¡VICTORIA! Sobreviviste {roundsToWin} rondas.");
 
-        // Mostrar UI de victoria
-        if (uiManager != null)
+        // Guardar resultado para la otra escena
+        if (GameResult.Instance != null)
         {
-            uiManager.ShowVictory(roundsToWin);
+            GameResult.Instance.SetWin(currentRound);
         }
 
         StopAllCoroutines();
+
+        // Ir al menú después de un delay
+        StartCoroutine(LoadMenuAfterDelay(1.5f));
+    }
+
+    /// <summary>
+    /// Cargar menú después de un delay
+    /// </summary>
+    private IEnumerator LoadMenuAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        UnityEngine.SceneManagement.SceneManager.LoadScene("UI_Menu");
     }
 
     #endregion
 
     #region Public Methods
 
-    /// <summary>
-    /// ⭐ NUEVO: Reiniciar el juego
-    /// </summary>
     public void RestartGame()
     {
         Debug.Log("🔄 Reiniciando juego...");
-
-        // Recargar la escena actual
         UnityEngine.SceneManagement.SceneManager.LoadScene(
             UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex
         );
     }
 
-    /// <summary>
-    /// ⭐ NUEVO: Salir al menú principal
-    /// </summary>
     public void GoToMainMenu()
     {
-        // Cambiar esto al nombre/índice de tu escena de menú
-        UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
+        UnityEngine.SceneManagement.SceneManager.LoadScene("UI_Menu");
     }
 
-    /// <summary>
-    /// ⭐ NUEVO: Obtener estado actual del juego
-    /// </summary>
     public GameState GetCurrentState()
     {
         return currentState;
